@@ -1,4 +1,4 @@
-import type { Tenant, Industry, TenantPlan } from '@lumiads/shared';
+import type { Tenant, Industry, TenantPlan } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 import { getDefaultRules } from './compliance';
 

@@ -1,5 +1,5 @@
-import type { DebateConfig } from '@lumiads/shared';
-import { DEFAULT_DEBATE_CONFIG } from '@lumiads/shared';
+import type { DebateConfig } from '../shared';
+import { DEFAULT_DEBATE_CONFIG } from '../shared';
 
 export { DEFAULT_DEBATE_CONFIG };
 

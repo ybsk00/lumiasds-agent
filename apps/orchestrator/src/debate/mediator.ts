@@ -1,5 +1,5 @@
 import { callGPT4o, type LLMResponse } from './model-clients';
-import type { DebateLog } from '@lumiads/shared';
+import type { DebateLog } from '../shared';
 
 const SYSTEM_PROMPT = `당신은 마케팅 전략 중재자입니다.
 전략가와 도전자의 토론을 종합하여 최적의 통합안을 도출합니다.

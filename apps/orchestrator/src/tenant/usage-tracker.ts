@@ -1,4 +1,4 @@
-import type { UsageType } from '@lumiads/shared';
+import type { UsageType } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 
 // ====================================================================

@@ -1,4 +1,4 @@
-import type { AgentModel, TokenUsage } from '@lumiads/shared';
+import type { AgentModel, TokenUsage } from '../shared';
 
 export interface LLMResponse {
   content: string;

@@ -1,4 +1,4 @@
-import type { Platform, Finding, FindingCategory } from '@lumiads/shared';
+import type { Platform, Finding, FindingCategory } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 import { runAnalysis } from '../agents/analyst.agent';
 import { runDebate } from '../debate/debate-orchestrator';

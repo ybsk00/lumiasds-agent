@@ -1,4 +1,4 @@
-import type { Platform, CampaignMetrics } from '@lumiads/shared';
+import type { Platform, CampaignMetrics } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 import { createNaverSearchAdsClient } from '../platforms/naver/search-ads';
 import { createMetaMarketingClient } from '../platforms/meta/marketing-api';

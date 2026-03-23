@@ -1,5 +1,5 @@
 import { callGemini, type LLMResponse } from './model-clients';
-import type { AnalysisReport, BenchmarkMetric } from '@lumiads/shared';
+import type { AnalysisReport, BenchmarkMetric } from '../shared';
 
 const SYSTEM_PROMPT = `당신은 마케팅 전략 검증 전문가(검증자)입니다.
 중재자가 도출한 최종 전략의 실현 가능성을 데이터 기반으로 검증합니다.

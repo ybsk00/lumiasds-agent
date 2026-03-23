@@ -1,5 +1,5 @@
-import type { AnalysisReport, DebateLog, DebateConfig, StrategyOutput } from '@lumiads/shared';
-import { DEFAULT_DEBATE_CONFIG } from '@lumiads/shared';
+import type { AnalysisReport, DebateLog, DebateConfig, StrategyOutput } from '../shared';
+import { DEFAULT_DEBATE_CONFIG } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 import { propose } from './strategist';
 import { challenge } from './challenger';

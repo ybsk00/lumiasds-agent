@@ -1,5 +1,5 @@
 import { callGemini, type LLMResponse } from './model-clients';
-import type { AnalysisReport, DebateLog } from '@lumiads/shared';
+import type { AnalysisReport, DebateLog } from '../shared';
 
 const SYSTEM_PROMPT = `당신은 한국 디지털 마케팅 전략 전문가(전략가)입니다.
 분석 보고서와 마케팅 목표를 기반으로 최적의 광고 전략을 수립합니다.

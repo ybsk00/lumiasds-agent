@@ -1,4 +1,4 @@
-import type { Platform, CreativeBrief, Creative, CreativeContent } from '@lumiads/shared';
+import type { Platform, CreativeBrief, Creative, CreativeContent } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 
 // ====================================================================

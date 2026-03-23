@@ -1,4 +1,4 @@
-import type { EncryptedApiKeys } from '@lumiads/shared';
+import type { EncryptedApiKeys } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 import crypto from 'crypto';
 

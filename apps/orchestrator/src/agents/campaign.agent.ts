@@ -1,4 +1,4 @@
-import type { Strategy, StrategyOutput, Platform, Campaign } from '@lumiads/shared';
+import type { Strategy, StrategyOutput, Platform, Campaign } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 import { generateAllCreatives } from './creative.agent';
 import { createNaverSearchAdsClient } from '../platforms/naver/search-ads';

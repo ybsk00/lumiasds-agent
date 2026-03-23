@@ -1,4 +1,4 @@
-import type { ComplianceRules } from '@lumiads/shared';
+import type { ComplianceRules } from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 
 // ====================================================================

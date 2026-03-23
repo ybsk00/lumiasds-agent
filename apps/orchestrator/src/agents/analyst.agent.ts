@@ -9,7 +9,7 @@ import type {
   InputSource,
   Platform,
   CampaignMetrics,
-} from '@lumiads/shared';
+} from '../shared';
 import { supabaseAdmin } from '../lib/supabase';
 
 // ====================================================================

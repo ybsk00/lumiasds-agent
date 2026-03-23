@@ -1,5 +1,5 @@
 import { callClaude, type LLMResponse } from './model-clients';
-import type { AnalysisReport, DebateLog } from '@lumiads/shared';
+import type { AnalysisReport, DebateLog } from '../shared';
 
 const SYSTEM_PROMPT = `당신은 마케팅 전략 감사관(도전자)입니다.
 전략가의 제안을 비판적으로 분석하여 리스크를 지적하고 대안을 제시합니다.
