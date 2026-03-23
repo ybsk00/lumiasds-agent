@@ -3,7 +3,7 @@
   "framework": null,
   "buildCommand": "",
   "functions": {
-    "api/**/*.ts": {
+    "api/**": {
       "maxDuration": 60
     }
   },
