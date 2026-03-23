@@ -1,0 +1,24 @@
+{
+  "name": "lumiads",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.4.0"
+  },
+  "packageManager": "npm@10.8.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

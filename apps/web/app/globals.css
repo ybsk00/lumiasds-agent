@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Pretendard:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 210 11% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 11% 11%;
+    --primary: 212 100% 37%;
+    --primary-foreground: 0 0% 100%;
+    --primary-container: 217 77% 64%;
+    --secondary: 221 30% 41%;
+    --secondary-foreground: 0 0% 100%;
+    --secondary-container: 220 100% 86%;
+    --muted: 210 14% 96%;
+    --muted-foreground: 224 10% 30%;
+    --accent: 210 14% 96%;
+    --accent-foreground: 210 11% 11%;
+    --destructive: 0 73% 41%;
+    --destructive-foreground: 0 0% 100%;
+    --error-container: 0 100% 93%;
+    --border: 224 15% 80%;
+    --input: 224 15% 80%;
+    --ring: 212 100% 37%;
+    --radius: 0.75rem;
+
+    /* Material 3 Tonal Palette */
+    --surface: 210 20% 98%;
+    --surface-container-lowest: 0 0% 100%;
+    --surface-container-low: 210 11% 95%;
+    --surface-container: 210 8% 93%;
+    --surface-container-high: 210 6% 91%;
+    --surface-container-highest: 210 5% 88%;
+    --surface-bright: 210 20% 98%;
+    --surface-variant: 210 5% 88%;
+    --on-surface: 210 11% 11%;
+    --on-surface-variant: 228 13% 30%;
+    --outline: 229 6% 49%;
+    --outline-variant: 228 12% 77%;
+
+    /* Semantic Agent Colors */
+    --tertiary: 26 100% 29%;
+    --tertiary-container: 26 100% 36%;
+    --tertiary-fixed: 26 100% 89%;
+    --on-tertiary-fixed-variant: 26 100% 22%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    font-family: 'Pretendard', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.02em;
+    text-rendering: optimizeLegibility;
+    @apply bg-background text-foreground;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    vertical-align: middle;
+  }
+}
+
+@layer utilities {
+  .ghost-border {
+    border: 1px solid rgba(194, 198, 214, 0.15);
+  }
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .ambient-shadow {
+    box-shadow: 0px 12px 32px rgba(25, 28, 30, 0.06);
+  }
+  .ambient-shadow-lg {
+    box-shadow: 0px 12px 32px rgba(25, 28, 30, 0.12);
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e0e3e5;
+    border-radius: 10px;
+  }
+}

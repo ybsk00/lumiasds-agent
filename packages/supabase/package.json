@@ -1,0 +1,8 @@
+{
+  "name": "@lumiads/supabase",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "migrate": "echo 'Run migrations via Supabase CLI'"
+  }
+}
