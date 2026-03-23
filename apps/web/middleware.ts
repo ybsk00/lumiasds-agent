@@ -26,17 +26,19 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // 로그인하지 않은 사용자 → 로그인 페이지로 리디렉트
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
+  const pathname = request.nextUrl.pathname;
+
+  // /dashboard/* 경로는 로그인 필요
+  if (!user && pathname.startsWith('/dashboard')) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
   // 로그인한 사용자가 로그인 페이지 접근 → 대시보드로 리디렉트
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  if (user && pathname === '/login') {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = '/dashboard';
     return NextResponse.redirect(url);
   }
 

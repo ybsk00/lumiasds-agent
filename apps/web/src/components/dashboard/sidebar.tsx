@@ -5,16 +5,16 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { href: '/', label: '대시보드', icon: 'dashboard' },
-  { href: '/analysis', label: '데이터 분석', icon: 'analytics' },
-  { href: '/strategy', label: '전략 수립', icon: 'insights' },
-  { href: '/creative', label: '소재 관리', icon: 'palette' },
-  { href: '/campaigns', label: '캠페인', icon: 'campaign' },
-  { href: '/reports', label: '리포트', icon: 'assessment' },
-  { href: '/approvals', label: '승인 대기', icon: 'pending_actions' },
+  { href: '/dashboard', label: '대시보드', icon: 'dashboard' },
+  { href: '/dashboard/analysis', label: '데이터 분석', icon: 'analytics' },
+  { href: '/dashboard/strategy', label: '전략 수립', icon: 'insights' },
+  { href: '/dashboard/creative', label: '소재 관리', icon: 'palette' },
+  { href: '/dashboard/campaigns', label: '캠페인', icon: 'campaign' },
+  { href: '/dashboard/reports', label: '리포트', icon: 'assessment' },
+  { href: '/dashboard/approvals', label: '승인 대기', icon: 'pending_actions' },
 ];
 
-const settingsItem = { href: '/settings', label: '설정', icon: 'settings' };
+const settingsItem = { href: '/dashboard/settings', label: '설정', icon: 'settings' };
 
 export function Sidebar() {
   const pathname = usePathname();

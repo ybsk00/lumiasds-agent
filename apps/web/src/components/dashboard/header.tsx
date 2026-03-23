@@ -3,15 +3,15 @@
 import { usePathname } from 'next/navigation';
 
 const pageTitles: Record<string, string> = {
-  '/': '대시보드',
-  '/analysis': '데이터 분석',
-  '/strategy': '전략 수립',
-  '/creative': '소재 관리',
-  '/campaigns': '캠페인 관리',
-  '/reports': '통합 리포트',
-  '/approvals': '승인 대기 내역',
-  '/settings': '설정',
-  '/settings/tenants': '테넌트 관리',
+  '/dashboard': '대시보드',
+  '/dashboard/analysis': '데이터 분석',
+  '/dashboard/strategy': '전략 수립',
+  '/dashboard/creative': '소재 관리',
+  '/dashboard/campaigns': '캠페인 관리',
+  '/dashboard/reports': '통합 리포트',
+  '/dashboard/approvals': '승인 대기 내역',
+  '/dashboard/settings': '설정',
+  '/dashboard/settings/tenants': '테넌트 관리',
 };
 
 export function Header() {

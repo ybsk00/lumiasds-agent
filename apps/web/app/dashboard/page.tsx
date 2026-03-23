@@ -57,7 +57,7 @@ export default function DashboardHome() {
             <p className="text-xs text-slate-600 mb-4 leading-relaxed">
               아래 빠른 시작 메뉴에서 API 키를 설정하고 데이터를 수집하면 AI가 자동으로 인사이트를 생성합니다.
             </p>
-            <Link href="/settings" className="w-full py-2 bg-surface-container-high text-on-surface text-xs font-bold rounded-lg hover:bg-surface-variant transition-all flex items-center justify-center gap-2">
+            <Link href="/dashboard/settings" className="w-full py-2 bg-surface-container-high text-on-surface text-xs font-bold rounded-lg hover:bg-surface-variant transition-all flex items-center justify-center gap-2">
               <span className="material-symbols-outlined text-sm">settings</span>
               설정으로 이동
             </Link>
@@ -67,7 +67,7 @@ export default function DashboardHome() {
 
       {/* 빠른 시작 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/analysis" className="bg-surface-container-lowest p-6 rounded-xl ghost-border group hover:ambient-shadow transition-all duration-200 cursor-pointer">
+        <Link href="/dashboard/analysis" className="bg-surface-container-lowest p-6 rounded-xl ghost-border group hover:ambient-shadow transition-all duration-200 cursor-pointer">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
               <span className="material-symbols-outlined text-primary">analytics</span>
@@ -78,7 +78,7 @@ export default function DashboardHome() {
             기존 광고 데이터를 업로드하거나 API로 수집하여 분석합니다
           </p>
         </Link>
-        <Link href="/strategy" className="bg-surface-container-lowest p-6 rounded-xl ghost-border group hover:ambient-shadow transition-all duration-200 cursor-pointer">
+        <Link href="/dashboard/strategy" className="bg-surface-container-lowest p-6 rounded-xl ghost-border group hover:ambient-shadow transition-all duration-200 cursor-pointer">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
               <span className="material-symbols-outlined text-purple-600">insights</span>
@@ -89,7 +89,7 @@ export default function DashboardHome() {
             4개 AI 에이전트가 토론하여 최적 광고 전략을 도출합니다
           </p>
         </Link>
-        <Link href="/campaigns" className="bg-surface-container-lowest p-6 rounded-xl ghost-border group hover:ambient-shadow transition-all duration-200 cursor-pointer">
+        <Link href="/dashboard/campaigns" className="bg-surface-container-lowest p-6 rounded-xl ghost-border group hover:ambient-shadow transition-all duration-200 cursor-pointer">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
               <span className="material-symbols-outlined text-orange-600">campaign</span>
