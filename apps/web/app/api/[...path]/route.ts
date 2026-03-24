@@ -517,6 +517,308 @@ app.post('/platforms/test', async (c) => {
   return c.json(results);
 });
 
+// ── 분석: 신규 광고 시장조사 ──
+app.post('/analysis/market-research', async (c) => {
+  const tenantId = getTenantId(c);
+  if (!tenantId) return c.json({ error: 'x-tenant-id required' }, 400);
+
+  const body = await c.req.json();
+  const { brandName, industry, product, keywords, websiteUrl, monthlyBudget } = body as {
+    brandName: string;
+    industry: string;
+    product: string;
+    keywords: string[];
+    websiteUrl?: string;
+    monthlyBudget?: number;
+  };
+
+  if (!brandName || !industry || !product || !keywords?.length) {
+    return c.json({ error: 'brandName, industry, product, keywords are required' }, 400);
+  }
+
+  const naverClientId = process.env.NAVER_CLIENT_ID;
+  const naverClientSecret = process.env.NAVER_CLIENT_SECRET;
+  const geminiKey = process.env.GOOGLE_AI_API_KEY;
+
+  if (!naverClientId || !naverClientSecret) {
+    return c.json({ error: 'NAVER_CLIENT_ID / NAVER_CLIENT_SECRET not configured' }, 500);
+  }
+  if (!geminiKey) {
+    return c.json({ error: 'GOOGLE_AI_API_KEY not configured' }, 500);
+  }
+
+  // 1) 키워드별 네이버 블로그 검색 → 브랜드 노출 확인
+  const keywordResults: Record<string, { total: number; brandMentions: number; topResults: any[] }> = {};
+
+  for (const keyword of keywords) {
+    try {
+      const query = encodeURIComponent(keyword);
+      const res = await fetch(
+        `https://openapi.naver.com/v1/search/blog.json?query=${query}&display=10&sort=sim`,
+        {
+          headers: {
+            'X-Naver-Client-Id': naverClientId,
+            'X-Naver-Client-Secret': naverClientSecret,
+          },
+        },
+      );
+      if (!res.ok) {
+        keywordResults[keyword] = { total: 0, brandMentions: 0, topResults: [] };
+        continue;
+      }
+      const data = (await res.json()) as { total: number; items: any[] };
+      const brandLower = brandName.toLowerCase();
+      const brandMentions = data.items.filter(
+        (item: any) =>
+          (item.title || '').toLowerCase().includes(brandLower) ||
+          (item.description || '').toLowerCase().includes(brandLower),
+      ).length;
+      keywordResults[keyword] = {
+        total: data.total,
+        brandMentions,
+        topResults: data.items.slice(0, 5).map((item: any) => ({
+          title: item.title?.replace(/<[^>]*>/g, ''),
+          link: item.link,
+          description: item.description?.replace(/<[^>]*>/g, '').slice(0, 100),
+        })),
+      };
+    } catch {
+      keywordResults[keyword] = { total: 0, brandMentions: 0, topResults: [] };
+    }
+  }
+
+  // 2) Gemini AI 분석 리포트 생성
+  const prompt = `You are a Korean digital marketing analyst. Analyze the following data and provide a structured marketing analysis report in Korean.
+
+Brand: ${brandName}
+Industry: ${industry}
+Product: ${product}
+Keywords: ${keywords.join(', ')}
+${websiteUrl ? `Website: ${websiteUrl}` : ''}
+${monthlyBudget ? `Monthly Budget: ${monthlyBudget.toLocaleString()}원` : ''}
+
+Naver Blog Search Results per keyword:
+${Object.entries(keywordResults)
+  .map(([kw, r]) => `- "${kw}": total ${r.total} results, brand mentions in top 10: ${r.brandMentions}`)
+  .join('\n')}
+
+Please return ONLY valid JSON (no markdown, no code fences) with this structure:
+{
+  "summary": "Brief overall assessment in Korean (2-3 sentences)",
+  "findings": [
+    { "category": "keyword_competition" | "blog_visibility" | "market_position", "title": "Finding title", "description": "Details", "severity": "high" | "medium" | "low" }
+  ],
+  "opportunities": [
+    { "title": "Opportunity title", "description": "Details", "priority": "high" | "medium" | "low", "estimatedCpcRange": "500~1500원" }
+  ],
+  "blogVisibilityScore": 0-100,
+  "keywordAnalysis": [
+    { "keyword": "...", "competition": "high" | "medium" | "low", "brandPresence": 0-10, "recommendation": "..." }
+  ]
+}`;
+
+  let report: any;
+  try {
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7 },
+        }),
+      },
+    );
+    if (!geminiRes.ok) throw new Error(`Gemini API ${geminiRes.status}: ${await geminiRes.text()}`);
+    const geminiData = (await geminiRes.json()) as any;
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const cleaned = rawText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    report = JSON.parse(cleaned);
+  } catch (e: any) {
+    return c.json({ error: `AI analysis failed: ${e.message}` }, 500);
+  }
+
+  // 3) Supabase에 저장
+  const db = getSupabase();
+  const { data: saved, error: saveError } = await db
+    .from('analysis_reports')
+    .insert({
+      tenant_id: tenantId,
+      report_type: 'market_research',
+      data: {
+        input: { brandName, industry, product, keywords, websiteUrl, monthlyBudget },
+        blogSearchResults: keywordResults,
+        aiReport: report,
+      },
+      summary: report.summary || 'Market research report',
+      created_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (saveError) return c.json({ error: saveError.message }, 500);
+
+  return c.json(saved);
+});
+
+// ── 분석: 기존 광고 데이터 수집·분석 ──
+app.post('/analysis/collect', async (c) => {
+  const tenantId = getTenantId(c);
+  if (!tenantId) return c.json({ error: 'x-tenant-id required' }, 400);
+
+  const body = await c.req.json();
+  const { platforms, dateRange } = body as {
+    platforms: string[];
+    dateRange: { start: string; end: string };
+  };
+
+  if (!platforms?.length || !dateRange?.start || !dateRange?.end) {
+    return c.json({ error: 'platforms and dateRange (start, end) are required' }, 400);
+  }
+
+  const geminiKey = process.env.GOOGLE_AI_API_KEY;
+  if (!geminiKey) return c.json({ error: 'GOOGLE_AI_API_KEY not configured' }, 500);
+
+  const db = getSupabase();
+  const { data: tenant } = await db.from('tenants').select('api_keys').eq('id', tenantId).single();
+  const apiKeys = (tenant?.api_keys as Record<string, any>) || {};
+
+  const collectedData: Record<string, any> = {};
+
+  // 네이버 검색광고 데이터 수집
+  if (platforms.includes('naver')) {
+    const naverCreds = apiKeys.naver || (process.env.NAVER_ADS_API_KEY ? {
+      apiKey: process.env.NAVER_ADS_API_KEY,
+      secretKey: process.env.NAVER_ADS_SECRET_KEY,
+      customerId: process.env.NAVER_ADS_CUSTOMER_ID,
+    } : null);
+
+    if (naverCreds) {
+      try {
+        const crypto = await import('crypto');
+        const ts = Date.now().toString();
+        const path = '/ncc/campaigns';
+        const sig = crypto.createHmac('sha256', naverCreds.secretKey).update(`${ts}.GET.${path}`).digest('base64');
+        const res = await fetch(`https://api.searchad.naver.com${path}`, {
+          headers: {
+            'X-Timestamp': ts,
+            'X-API-KEY': naverCreds.apiKey,
+            'X-Customer': naverCreds.customerId,
+            'X-Signature': sig,
+          },
+        });
+        if (!res.ok) throw new Error(`Naver API ${res.status}`);
+        const campaigns = await res.json();
+        collectedData.naver = { campaigns, campaignCount: Array.isArray(campaigns) ? campaigns.length : 0 };
+      } catch (e: any) {
+        collectedData.naver = { error: e.message, campaigns: [] };
+      }
+    } else {
+      collectedData.naver = { error: 'No Naver Ads credentials configured', campaigns: [] };
+    }
+  }
+
+  // 메타 마케팅 API 데이터 수집
+  if (platforms.includes('meta')) {
+    const metaCreds = apiKeys.meta || (process.env.META_ADS_ACCESS_TOKEN ? {
+      accessToken: process.env.META_ADS_ACCESS_TOKEN,
+      adAccountId: process.env.META_ADS_ACCOUNT_ID?.startsWith('act_')
+        ? process.env.META_ADS_ACCOUNT_ID
+        : `act_${process.env.META_ADS_ACCOUNT_ID}`,
+    } : null);
+
+    if (metaCreds) {
+      try {
+        const token = metaCreds.accessToken || metaCreds.access_token;
+        const accountId = metaCreds.adAccountId || metaCreds.ad_account_id;
+        const res = await fetch(
+          `https://graph.facebook.com/v21.0/${accountId}/insights?` +
+          `access_token=${token}` +
+          `&fields=campaign_name,impressions,clicks,spend,actions,cpc,cpm,ctr` +
+          `&time_range={"since":"${dateRange.start}","until":"${dateRange.end}"}` +
+          `&level=campaign&limit=100`,
+        );
+        if (!res.ok) throw new Error(`Meta API ${res.status}`);
+        const insights = await res.json();
+        collectedData.meta = { insights: insights.data || [], totalCampaigns: (insights.data || []).length };
+      } catch (e: any) {
+        collectedData.meta = { error: e.message, insights: [] };
+      }
+    } else {
+      collectedData.meta = { error: 'No Meta Ads credentials configured', insights: [] };
+    }
+  }
+
+  // Gemini AI 분석
+  const prompt = `You are a Korean digital marketing performance analyst. Analyze the following ad platform data and provide actionable insights in Korean.
+
+Date Range: ${dateRange.start} ~ ${dateRange.end}
+Platforms analyzed: ${platforms.join(', ')}
+
+Collected Data:
+${JSON.stringify(collectedData, null, 2)}
+
+Please return ONLY valid JSON (no markdown, no code fences) with this structure:
+{
+  "summary": "Overall performance assessment in Korean (2-3 sentences)",
+  "findings": [
+    { "platform": "naver" | "meta", "category": "performance" | "budget" | "targeting" | "creative", "title": "Finding title", "description": "Details", "severity": "high" | "medium" | "low" }
+  ],
+  "opportunities": [
+    { "title": "Optimization opportunity", "description": "Details", "platform": "naver" | "meta" | "all", "estimatedImpact": "high" | "medium" | "low" }
+  ],
+  "platformComparison": {
+    "bestPerforming": "platform name",
+    "recommendation": "Budget allocation recommendation"
+  },
+  "nextSteps": ["Step 1", "Step 2", "Step 3"]
+}`;
+
+  let report: any;
+  try {
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7 },
+        }),
+      },
+    );
+    if (!geminiRes.ok) throw new Error(`Gemini API ${geminiRes.status}: ${await geminiRes.text()}`);
+    const geminiData = (await geminiRes.json()) as any;
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const cleaned = rawText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    report = JSON.parse(cleaned);
+  } catch (e: any) {
+    return c.json({ error: `AI analysis failed: ${e.message}` }, 500);
+  }
+
+  // Supabase에 저장
+  const { data: saved, error: saveError } = await db
+    .from('analysis_reports')
+    .insert({
+      tenant_id: tenantId,
+      report_type: 'ad_performance',
+      data: {
+        input: { platforms, dateRange },
+        collectedData,
+        aiReport: report,
+      },
+      summary: report.summary || 'Ad performance analysis report',
+      created_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (saveError) return c.json({ error: saveError.message }, 500);
+
+  return c.json(saved);
+});
+
 // ── 설정: API 키 저장 ──
 app.put('/settings/api-keys', async (c) => {
   const tenantId = getTenantId(c);
