@@ -112,7 +112,8 @@ export async function executeCampaignCreation(config: CampaignAgentConfig): Prom
           result = await createMetaCampaign(config, apiKeys.meta, output, input);
           break;
         case 'google':
-          result = await createGoogleCampaign(config, apiKeys.google, output, input);
+          // Google Ads 기본 액세스 승인 대기 중 — 승인 후 활성화
+          result = { success: false, platform: 'google', campaignId: null, platformCampaignId: null, error: 'Google Ads API pending approval — skipped' };
           break;
         default:
           result = { success: false, platform, campaignId: null, platformCampaignId: null, error: `Unsupported platform: ${platform}` };
