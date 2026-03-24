@@ -337,6 +337,88 @@ app.get('/notifications', async (c) => {
   return c.json(data || []);
 });
 
+// ── 플랫폼 연결 테스트 ──
+app.post('/platforms/test', async (c) => {
+  const tenantId = getTenantId(c);
+  const body = await c.req.json().catch(() => ({}));
+  const { platform } = body as { platform?: string };
+
+  const db = getSupabase();
+  const { data: tenant } = tenantId
+    ? await db.from('tenants').select('api_keys').eq('id', tenantId).single()
+    : { data: null };
+
+  const apiKeys = (tenant?.api_keys as Record<string, any>) || {};
+
+  // 환경변수 fallback
+  const naverCreds = apiKeys.naver || (process.env.NAVER_ADS_API_KEY ? {
+    apiKey: process.env.NAVER_ADS_API_KEY,
+    secretKey: process.env.NAVER_ADS_SECRET_KEY,
+    customerId: process.env.NAVER_ADS_CUSTOMER_ID,
+  } : null);
+
+  const metaCreds = apiKeys.meta || (process.env.META_ADS_ACCESS_TOKEN ? {
+    accessToken: process.env.META_ADS_ACCESS_TOKEN,
+    adAccountId: process.env.META_ADS_ACCOUNT_ID?.startsWith('act_')
+      ? process.env.META_ADS_ACCOUNT_ID
+      : `act_${process.env.META_ADS_ACCOUNT_ID}`,
+  } : null);
+
+  const googleCreds = apiKeys.google || (process.env.GOOGLE_ADS_DEVELOPER_TOKEN ? {
+    developerToken: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+    clientId: process.env.GOOGLE_ADS_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+    refreshToken: process.env.GOOGLE_ADS_REFRESH_TOKEN,
+    customerId: process.env.GOOGLE_ADS_CUSTOMER_ID,
+  } : null);
+
+  const results: Record<string, { success: boolean; message: string }> = {};
+
+  if ((!platform || platform === 'naver') && naverCreds) {
+    try {
+      const { createNaverSearchAdsClient } = await import('../../../orchestrator/src/platforms/naver/search-ads');
+      const client = createNaverSearchAdsClient(naverCreds);
+      await client.campaigns.list();
+      results.naver = { success: true, message: 'Connected' };
+    } catch (e: any) {
+      results.naver = { success: false, message: e.message };
+    }
+  } else if (!platform || platform === 'naver') {
+    results.naver = { success: false, message: 'No credentials configured' };
+  }
+
+  if ((!platform || platform === 'meta') && metaCreds) {
+    try {
+      const { createMetaMarketingClient } = await import('../../../orchestrator/src/platforms/meta/marketing-api');
+      const client = createMetaMarketingClient({
+        accessToken: metaCreds.accessToken || metaCreds.access_token,
+        adAccountId: metaCreds.adAccountId || metaCreds.ad_account_id,
+      });
+      await client.campaigns.list();
+      results.meta = { success: true, message: 'Connected' };
+    } catch (e: any) {
+      results.meta = { success: false, message: e.message };
+    }
+  } else if (!platform || platform === 'meta') {
+    results.meta = { success: false, message: 'No credentials configured' };
+  }
+
+  if ((!platform || platform === 'google') && googleCreds) {
+    try {
+      const { createGoogleAdsClient } = await import('../../../orchestrator/src/platforms/google/ads-api');
+      const client = createGoogleAdsClient(googleCreds);
+      await client.campaigns.list();
+      results.google = { success: true, message: 'Connected' };
+    } catch (e: any) {
+      results.google = { success: false, message: e.message };
+    }
+  } else if (!platform || platform === 'google') {
+    results.google = { success: false, message: 'No credentials configured (pending approval)' };
+  }
+
+  return c.json(results);
+});
+
 // ── 설정: API 키 저장 ──
 app.put('/settings/api-keys', async (c) => {
   const tenantId = getTenantId(c);

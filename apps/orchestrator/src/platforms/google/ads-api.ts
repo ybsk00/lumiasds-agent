@@ -1,4 +1,4 @@
-const BASE_URL = 'https://googleads.googleapis.com/v18';
+const BASE_URL = 'https://googleads.googleapis.com/v19';
 
 interface GoogleAdsCredentials {
   developerToken: string;
