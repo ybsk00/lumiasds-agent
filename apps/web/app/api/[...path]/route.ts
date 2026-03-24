@@ -645,14 +645,13 @@ Please return ONLY valid JSON (no markdown, no code fences) with this structure:
     .from('analysis_reports')
     .insert({
       tenant_id: tenantId,
-      report_type: 'market_research',
-      data: {
-        input: { brandName, industry, product, keywords, websiteUrl, monthlyBudget },
-        blogSearchResults: keywordResults,
-        aiReport: report,
-      },
+      type: 'market_research',
+      status: 'completed',
+      input_sources: { brandName, industry, product, keywords, websiteUrl, monthlyBudget },
       summary: report.summary || 'Market research report',
-      created_at: new Date().toISOString(),
+      findings: report.findings || [],
+      opportunities: report.opportunities || [],
+      raw_analysis: { blogSearchResults: keywordResults, aiReport: report },
     })
     .select()
     .single();
@@ -802,14 +801,13 @@ Please return ONLY valid JSON (no markdown, no code fences) with this structure:
     .from('analysis_reports')
     .insert({
       tenant_id: tenantId,
-      report_type: 'ad_performance',
-      data: {
-        input: { platforms, dateRange },
-        collectedData,
-        aiReport: report,
-      },
+      type: 'ad_performance',
+      status: 'completed',
+      input_sources: { platforms, dateRange },
       summary: report.summary || 'Ad performance analysis report',
-      created_at: new Date().toISOString(),
+      findings: report.findings || [],
+      opportunities: report.opportunities || [],
+      raw_analysis: { collectedData, aiReport: report },
     })
     .select()
     .single();
