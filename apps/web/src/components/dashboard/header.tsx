@@ -1,6 +1,7 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 const pageTitles: Record<string, string> = {
   '/dashboard': '대시보드',
@@ -16,7 +17,15 @@ const pageTitles: Record<string, string> = {
 
 export function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const title = pageTitles[pathname] || '대시보드';
+
+  const handleLogout = async () => {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
 
   return (
     <header className="h-14 fixed top-0 right-0 left-64 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-8">
@@ -37,6 +46,13 @@ export function Header() {
             AD
           </div>
         </div>
+        <div className="h-6 w-[1px] bg-slate-200" />
+        <button
+          onClick={handleLogout}
+          className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+        >
+          로그아웃
+        </button>
       </div>
     </header>
   );
