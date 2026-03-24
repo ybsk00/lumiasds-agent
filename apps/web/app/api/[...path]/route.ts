@@ -147,6 +147,82 @@ app.post('/campaigns/:id/pause', async (c) => {
   return c.json(data);
 });
 
+// ── AI 모델 연결 테스트 ──
+app.post('/ai/test', async (c) => {
+  const results: Record<string, { success: boolean; message: string; model?: string }> = {};
+
+  // Gemini (전략가 + 검증자 + 분석)
+  if (process.env.GOOGLE_AI_API_KEY) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: 'Reply with just "ok"' }] }] }),
+        },
+      );
+      if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+      results.gemini = { success: true, message: 'Connected', model: 'gemini-2.0-flash' };
+    } catch (e: any) {
+      results.gemini = { success: false, message: e.message };
+    }
+  } else {
+    results.gemini = { success: false, message: 'GOOGLE_AI_API_KEY not set' };
+  }
+
+  // Claude (도전자)
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'Reply with just "ok"' }],
+        }),
+      });
+      if (!res.ok) throw new Error(`Claude ${res.status}: ${await res.text()}`);
+      results.claude = { success: true, message: 'Connected', model: 'claude-sonnet-4' };
+    } catch (e: any) {
+      results.claude = { success: false, message: e.message };
+    }
+  } else {
+    results.claude = { success: false, message: 'ANTHROPIC_API_KEY not set' };
+  }
+
+  // GPT-4o (중재자)
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'Reply with just "ok"' }],
+        }),
+      });
+      if (!res.ok) throw new Error(`GPT-4o ${res.status}: ${await res.text()}`);
+      results.gpt4o = { success: true, message: 'Connected', model: 'gpt-4o' };
+    } catch (e: any) {
+      results.gpt4o = { success: false, message: e.message };
+    }
+  } else {
+    results.gpt4o = { success: false, message: 'OPENAI_API_KEY not set' };
+  }
+
+  return c.json(results);
+});
+
 // ── 분석 ──
 app.get('/analysis/reports', async (c) => {
   const tenantId = getTenantId(c);
