@@ -374,11 +374,20 @@ app.post('/platforms/test', async (c) => {
 
   const results: Record<string, { success: boolean; message: string }> = {};
 
+  // 네이버 검색광고 테스트 (HMAC-SHA256 인라인)
   if ((!platform || platform === 'naver') && naverCreds) {
     try {
-      const { createNaverSearchAdsClient } = await import('../../../orchestrator/src/platforms/naver/search-ads');
-      const client = createNaverSearchAdsClient(naverCreds);
-      await client.campaigns.list();
+      const crypto = await import('crypto');
+      const ts = Date.now().toString();
+      const path = '/ncc/campaigns';
+      const sig = crypto.createHmac('sha256', naverCreds.secretKey).update(`${ts}.GET.${path}`).digest('base64');
+      const res = await fetch(`https://api.searchad.naver.com${path}`, {
+        headers: {
+          'X-Timestamp': ts, 'X-API-KEY': naverCreds.apiKey,
+          'X-Customer': naverCreds.customerId, 'X-Signature': sig,
+        },
+      });
+      if (!res.ok) throw new Error(`Naver API ${res.status}: ${await res.text()}`);
       results.naver = { success: true, message: 'Connected' };
     } catch (e: any) {
       results.naver = { success: false, message: e.message };
@@ -387,14 +396,13 @@ app.post('/platforms/test', async (c) => {
     results.naver = { success: false, message: 'No credentials configured' };
   }
 
+  // 메타 마케팅 API 테스트
   if ((!platform || platform === 'meta') && metaCreds) {
     try {
-      const { createMetaMarketingClient } = await import('../../../orchestrator/src/platforms/meta/marketing-api');
-      const client = createMetaMarketingClient({
-        accessToken: metaCreds.accessToken || metaCreds.access_token,
-        adAccountId: metaCreds.adAccountId || metaCreds.ad_account_id,
-      });
-      await client.campaigns.list();
+      const token = metaCreds.accessToken || metaCreds.access_token;
+      const accountId = metaCreds.adAccountId || metaCreds.ad_account_id;
+      const res = await fetch(`https://graph.facebook.com/v21.0/${accountId}/campaigns?access_token=${token}&fields=id,name&limit=1`);
+      if (!res.ok) throw new Error(`Meta API ${res.status}: ${await res.text()}`);
       results.meta = { success: true, message: 'Connected' };
     } catch (e: any) {
       results.meta = { success: false, message: e.message };
@@ -403,11 +411,25 @@ app.post('/platforms/test', async (c) => {
     results.meta = { success: false, message: 'No credentials configured' };
   }
 
+  // Google Ads API 테스트
   if ((!platform || platform === 'google') && googleCreds) {
     try {
-      const { createGoogleAdsClient } = await import('../../../orchestrator/src/platforms/google/ads-api');
-      const client = createGoogleAdsClient(googleCreds);
-      await client.campaigns.list();
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: googleCreds.clientId,
+          client_secret: googleCreds.clientSecret,
+          refresh_token: googleCreds.refreshToken,
+        }),
+      });
+      if (!tokenRes.ok) throw new Error(`Google OAuth ${tokenRes.status}`);
+      const { access_token } = (await tokenRes.json()) as { access_token: string };
+      const adsRes = await fetch(`https://googleads.googleapis.com/v19/customers:listAccessibleCustomers`, {
+        headers: { Authorization: `Bearer ${access_token}`, 'developer-token': googleCreds.developerToken },
+      });
+      if (!adsRes.ok) throw new Error(`Google Ads API ${adsRes.status}: ${await adsRes.text()}`);
       results.google = { success: true, message: 'Connected' };
     } catch (e: any) {
       results.google = { success: false, message: e.message };
