@@ -547,45 +547,43 @@ app.post('/analysis/market-research', async (c) => {
     return c.json({ error: 'GOOGLE_AI_API_KEY not configured' }, 500);
   }
 
-  // 1) 키워드별 네이버 블로그 검색 → 브랜드 노출 확인
-  const keywordResults: Record<string, { total: number; brandMentions: number; topResults: any[] }> = {};
-
-  for (const keyword of keywords) {
-    try {
-      const query = encodeURIComponent(keyword);
-      const res = await fetch(
-        `https://openapi.naver.com/v1/search/blog.json?query=${query}&display=10&sort=sim`,
-        {
-          headers: {
-            'X-Naver-Client-Id': naverClientId,
-            'X-Naver-Client-Secret': naverClientSecret,
+  // 1) 키워드별 네이버 블로그 검색 → 브랜드 노출 확인 (병렬)
+  const brandLower = brandName.toLowerCase();
+  const keywordEntries = await Promise.all(
+    keywords.map(async (keyword: string) => {
+      try {
+        const query = encodeURIComponent(keyword);
+        const res = await fetch(
+          `https://openapi.naver.com/v1/search/blog.json?query=${query}&display=10&sort=sim`,
+          {
+            headers: {
+              'X-Naver-Client-Id': naverClientId,
+              'X-Naver-Client-Secret': naverClientSecret,
+            },
           },
-        },
-      );
-      if (!res.ok) {
-        keywordResults[keyword] = { total: 0, brandMentions: 0, topResults: [] };
-        continue;
+        );
+        if (!res.ok) return [keyword, { total: 0, brandMentions: 0, topResults: [] }] as const;
+        const data = (await res.json()) as { total: number; items: any[] };
+        const brandMentions = data.items.filter(
+          (item: any) =>
+            (item.title || '').toLowerCase().includes(brandLower) ||
+            (item.description || '').toLowerCase().includes(brandLower),
+        ).length;
+        return [keyword, {
+          total: data.total,
+          brandMentions,
+          topResults: data.items.slice(0, 5).map((item: any) => ({
+            title: item.title?.replace(/<[^>]*>/g, ''),
+            link: item.link,
+            description: item.description?.replace(/<[^>]*>/g, '').slice(0, 100),
+          })),
+        }] as const;
+      } catch {
+        return [keyword, { total: 0, brandMentions: 0, topResults: [] }] as const;
       }
-      const data = (await res.json()) as { total: number; items: any[] };
-      const brandLower = brandName.toLowerCase();
-      const brandMentions = data.items.filter(
-        (item: any) =>
-          (item.title || '').toLowerCase().includes(brandLower) ||
-          (item.description || '').toLowerCase().includes(brandLower),
-      ).length;
-      keywordResults[keyword] = {
-        total: data.total,
-        brandMentions,
-        topResults: data.items.slice(0, 5).map((item: any) => ({
-          title: item.title?.replace(/<[^>]*>/g, ''),
-          link: item.link,
-          description: item.description?.replace(/<[^>]*>/g, '').slice(0, 100),
-        })),
-      };
-    } catch {
-      keywordResults[keyword] = { total: 0, brandMentions: 0, topResults: [] };
-    }
-  }
+    }),
+  );
+  const keywordResults: Record<string, { total: number; brandMentions: number; topResults: any[] }> = Object.fromEntries(keywordEntries);
 
   // 2) Gemini AI 분석 리포트 생성
   const prompt = `You are a Korean digital marketing analyst. Analyze the following data and provide a structured marketing analysis report in Korean.
@@ -685,7 +683,9 @@ app.post('/analysis/collect', async (c) => {
 
   const collectedData: Record<string, any> = {};
 
-  // 네이버 검색광고 데이터 수집
+  // 네이버 + 메타 데이터 수집 (병렬)
+  const platformFetches: Promise<void>[] = [];
+
   if (platforms.includes('naver')) {
     const naverCreds = apiKeys.naver || (process.env.NAVER_ADS_API_KEY ? {
       apiKey: process.env.NAVER_ADS_API_KEY,
@@ -694,31 +694,32 @@ app.post('/analysis/collect', async (c) => {
     } : null);
 
     if (naverCreds) {
-      try {
-        const crypto = await import('crypto');
-        const ts = Date.now().toString();
-        const path = '/ncc/campaigns';
-        const sig = crypto.createHmac('sha256', naverCreds.secretKey).update(`${ts}.GET.${path}`).digest('base64');
-        const res = await fetch(`https://api.searchad.naver.com${path}`, {
-          headers: {
-            'X-Timestamp': ts,
-            'X-API-KEY': naverCreds.apiKey,
-            'X-Customer': naverCreds.customerId,
-            'X-Signature': sig,
-          },
-        });
-        if (!res.ok) throw new Error(`Naver API ${res.status}`);
-        const campaigns = await res.json();
-        collectedData.naver = { campaigns, campaignCount: Array.isArray(campaigns) ? campaigns.length : 0 };
-      } catch (e: any) {
-        collectedData.naver = { error: e.message, campaigns: [] };
-      }
+      platformFetches.push((async () => {
+        try {
+          const crypto = await import('crypto');
+          const ts = Date.now().toString();
+          const path = '/ncc/campaigns';
+          const sig = crypto.createHmac('sha256', naverCreds.secretKey).update(`${ts}.GET.${path}`).digest('base64');
+          const res = await fetch(`https://api.searchad.naver.com${path}`, {
+            headers: {
+              'X-Timestamp': ts,
+              'X-API-KEY': naverCreds.apiKey,
+              'X-Customer': naverCreds.customerId,
+              'X-Signature': sig,
+            },
+          });
+          if (!res.ok) throw new Error(`Naver API ${res.status}`);
+          const campaigns = await res.json();
+          collectedData.naver = { campaigns, campaignCount: Array.isArray(campaigns) ? campaigns.length : 0 };
+        } catch (e: any) {
+          collectedData.naver = { error: e.message, campaigns: [] };
+        }
+      })());
     } else {
       collectedData.naver = { error: 'No Naver Ads credentials configured', campaigns: [] };
     }
   }
 
-  // 메타 마케팅 API 데이터 수집
   if (platforms.includes('meta')) {
     const metaCreds = apiKeys.meta || (process.env.META_ADS_ACCESS_TOKEN ? {
       accessToken: process.env.META_ADS_ACCESS_TOKEN,
@@ -728,26 +729,30 @@ app.post('/analysis/collect', async (c) => {
     } : null);
 
     if (metaCreds) {
-      try {
-        const token = metaCreds.accessToken || metaCreds.access_token;
-        const accountId = metaCreds.adAccountId || metaCreds.ad_account_id;
-        const res = await fetch(
-          `https://graph.facebook.com/v21.0/${accountId}/insights?` +
-          `access_token=${token}` +
-          `&fields=campaign_name,impressions,clicks,spend,actions,cpc,cpm,ctr` +
-          `&time_range={"since":"${dateRange.start}","until":"${dateRange.end}"}` +
-          `&level=campaign&limit=100`,
-        );
-        if (!res.ok) throw new Error(`Meta API ${res.status}`);
-        const insights = await res.json();
-        collectedData.meta = { insights: insights.data || [], totalCampaigns: (insights.data || []).length };
-      } catch (e: any) {
-        collectedData.meta = { error: e.message, insights: [] };
-      }
+      platformFetches.push((async () => {
+        try {
+          const token = metaCreds.accessToken || metaCreds.access_token;
+          const accountId = metaCreds.adAccountId || metaCreds.ad_account_id;
+          const res = await fetch(
+            `https://graph.facebook.com/v21.0/${accountId}/insights?` +
+            `access_token=${token}` +
+            `&fields=campaign_name,impressions,clicks,spend,actions,cpc,cpm,ctr` +
+            `&time_range={"since":"${dateRange.start}","until":"${dateRange.end}"}` +
+            `&level=campaign&limit=100`,
+          );
+          if (!res.ok) throw new Error(`Meta API ${res.status}`);
+          const insights = await res.json();
+          collectedData.meta = { insights: insights.data || [], totalCampaigns: (insights.data || []).length };
+        } catch (e: any) {
+          collectedData.meta = { error: e.message, insights: [] };
+        }
+      })());
     } else {
       collectedData.meta = { error: 'No Meta Ads credentials configured', insights: [] };
     }
   }
+
+  await Promise.all(platformFetches);
 
   // Gemini AI 분석
   const prompt = `You are a Korean digital marketing performance analyst. Analyze the following ad platform data and provide actionable insights in Korean.

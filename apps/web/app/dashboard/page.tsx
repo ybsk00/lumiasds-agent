@@ -1,25 +1,82 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+const TENANT_ID = 'd944536d-76c4-4812-857b-e157912d775d';
+
+interface KPI {
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  cost: number;
+  revenue: number;
+  ctr: number;
+  roas: number;
+}
+
+interface Campaign {
+  id: string;
+  platform: string;
+  name: string;
+  status: string;
+  budget_daily: number;
+}
+
+interface PlatformStatus {
+  naver?: { success: boolean; message: string };
+  meta?: { success: boolean; message: string };
+  google?: { success: boolean; message: string };
+}
 
 export default function DashboardHome() {
+  const [kpi, setKpi] = useState<KPI | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [platformStatus, setPlatformStatus] = useState<PlatformStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const headers = { 'x-tenant-id': TENANT_ID };
+
+    // 3개 API 병렬 호출
+    Promise.all([
+      fetch('/api/reports/dashboard', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/campaigns', { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch('/api/platforms/test', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([kpiData, campaignData, statusData]) => {
+      if (kpiData) setKpi(kpiData);
+      setCampaigns(Array.isArray(campaignData) ? campaignData : []);
+      if (statusData) setPlatformStatus(statusData);
+      setLoading(false);
+    });
+  }, []);
+
+  const fmt = (n: number) => n >= 1000000 ? `₩${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `₩${(n / 1000).toFixed(0)}K` : `₩${n.toLocaleString()}`;
+
+  const kpiCards = [
+    { label: '총 지출', value: kpi ? fmt(kpi.cost) : '-', icon: 'payments', color: 'border-l-primary' },
+    { label: '평균 CTR', value: kpi ? `${kpi.ctr.toFixed(2)}%` : '-', icon: 'ads_click', color: 'border-l-secondary' },
+    { label: '평균 CPC', value: kpi && kpi.clicks > 0 ? fmt(Math.round(kpi.cost / kpi.clicks)) : '-', icon: 'price_change', color: 'border-l-tertiary' },
+    { label: '총 전환', value: kpi ? kpi.conversions.toLocaleString() : '-', icon: 'shopping_cart', color: 'border-l-primary-container' },
+    { label: 'ROAS', value: kpi ? `${(kpi.roas * 100).toFixed(0)}%` : '-', icon: 'trending_up', color: 'border-l-emerald-500' },
+  ];
+
+  const platformRows = [
+    { name: '네이버', key: 'naver' as const, badge: 'N', badgeColor: 'bg-green-500' },
+    { name: 'Meta', key: 'meta' as const, badge: 'M', badgeColor: 'bg-blue-600' },
+    { name: 'Google', key: 'google' as const, badge: 'G', badgeColor: 'bg-red-500' },
+  ];
+
   return (
     <div className="space-y-8">
       {/* KPI 카드 */}
       <section className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        {[
-          { label: '총 지출', value: '₩0', change: '데이터 없음', color: 'border-l-primary', icon: 'payments' },
-          { label: '평균 CTR', value: '0%', change: '데이터 없음', color: 'border-l-secondary', icon: 'ads_click' },
-          { label: '평균 CPC', value: '₩0', change: '데이터 없음', color: 'border-l-tertiary', icon: 'price_change' },
-          { label: '총 전환', value: '0', change: '데이터 없음', color: 'border-l-primary-container', icon: 'shopping_cart' },
-          { label: 'ROAS', value: '0%', change: '데이터 없음', color: 'border-l-emerald-500', icon: 'trending_up' },
-        ].map((kpi) => (
-          <div key={kpi.label} className={`bg-surface-container-lowest p-6 rounded-xl border-l-4 ${kpi.color} ghost-border`}>
-            <p className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider">{kpi.label}</p>
-            <h3 className="text-2xl font-bold text-on-surface">{kpi.value}</h3>
-            <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-              {kpi.change}
-            </p>
+        {kpiCards.map((card) => (
+          <div key={card.label} className={`bg-surface-container-lowest p-6 rounded-xl border-l-4 ${card.color} ghost-border`}>
+            <p className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider">{card.label}</p>
+            <h3 className="text-2xl font-bold text-on-surface">
+              {loading ? <span className="inline-block w-16 h-7 bg-surface-container animate-pulse rounded" /> : card.value}
+            </h3>
           </div>
         ))}
       </section>
@@ -113,36 +170,42 @@ export default function DashboardHome() {
               <tr>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">매체</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">캠페인</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">지출</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">ROAS</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">일예산</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">상태</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-container">
-              {[
-                { name: '네이버', badge: 'N', badgeColor: 'bg-green-500', status: 'API 키 미설정', statusColor: 'bg-amber-100 text-amber-700' },
-                { name: 'Meta', badge: 'M', badgeColor: 'bg-blue-600', status: 'API 키 미설정', statusColor: 'bg-amber-100 text-amber-700' },
-                { name: 'Google', badge: 'G', badgeColor: 'bg-red-500', status: 'API 키 미설정', statusColor: 'bg-amber-100 text-amber-700' },
-              ].map((p) => (
-                <tr key={p.name} className="hover:bg-surface-container-low transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg ${p.badgeColor} flex items-center justify-center text-white text-[10px] font-bold`}>
-                        {p.badge}
+              {platformRows.map((p) => {
+                const pCampaigns = campaigns.filter(c => c.platform === p.key);
+                const totalBudget = pCampaigns.reduce((sum, c) => sum + (c.budget_daily || 0), 0);
+                const status = platformStatus?.[p.key];
+                const connected = status?.success;
+                return (
+                  <tr key={p.name} className="hover:bg-surface-container-low transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg ${p.badgeColor} flex items-center justify-center text-white text-[10px] font-bold`}>
+                          {p.badge}
+                        </div>
+                        <span className="text-sm font-semibold">{p.name}</span>
                       </div>
-                      <span className="text-sm font-semibold">{p.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium">0</td>
-                  <td className="px-6 py-4 text-sm font-medium">₩0</td>
-                  <td className="px-6 py-4 text-sm font-medium">-</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${p.statusColor}`}>
-                      {p.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium">{loading ? '-' : pCampaigns.length}</td>
+                    <td className="px-6 py-4 text-sm font-medium">{loading ? '-' : totalBudget > 0 ? fmt(totalBudget) : '₩0'}</td>
+                    <td className="px-6 py-4">
+                      {loading ? (
+                        <span className="inline-block w-16 h-5 bg-surface-container animate-pulse rounded-full" />
+                      ) : (
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                          connected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {connected ? 'Connected' : status?.message || 'API 키 미설정'}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
