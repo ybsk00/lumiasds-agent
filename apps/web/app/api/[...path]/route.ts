@@ -490,26 +490,27 @@ app.post('/platforms/test', async (c) => {
     results.meta = { success: false, message: 'No credentials configured' };
   }
 
-  // Google Ads API 테스트
+  // Google Ads API 테스트 (gRPC via google-ads-api)
   if ((!platform || platform === 'google') && googleCreds) {
     tests.push((async () => {
       try {
-        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ grant_type: 'refresh_token', client_id: googleCreds.clientId, client_secret: googleCreds.clientSecret, refresh_token: googleCreds.refreshToken }),
+        const { GoogleAdsApi } = await import('google-ads-api');
+        const gadsClient = new GoogleAdsApi({
+          client_id: googleCreds.clientId,
+          client_secret: googleCreds.clientSecret,
+          developer_token: googleCreds.developerToken,
         });
-        if (!tokenRes.ok) throw new Error(`Google OAuth ${tokenRes.status}`);
-        const { access_token } = (await tokenRes.json()) as { access_token: string };
-        const adsRes = await fetch(`https://googleads.googleapis.com/v19/customers:listAccessibleCustomers`, {
-          headers: { Authorization: `Bearer ${access_token}`, 'developer-token': googleCreds.developerToken },
+        const customer = gadsClient.Customer({
+          customer_id: googleCreds.customerId,
+          refresh_token: googleCreds.refreshToken,
         });
-        if (!adsRes.ok) throw new Error(`Google Ads API ${adsRes.status}: ${await adsRes.text()}`);
-        results.google = { success: true, message: 'Connected' };
+        const res = await customer.query('SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1');
+        const name = res[0]?.customer?.descriptive_name || res[0]?.customer?.id;
+        results.google = { success: true, message: `Connected (${name})` };
       } catch (e: any) { results.google = { success: false, message: e.message }; }
     })());
   } else if (!platform || platform === 'google') {
-    results.google = { success: false, message: 'No credentials configured (pending approval)' };
+    results.google = { success: false, message: 'No credentials configured' };
   }
 
   await Promise.all(tests);

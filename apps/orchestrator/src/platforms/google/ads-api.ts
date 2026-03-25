@@ -1,4 +1,4 @@
-const BASE_URL = 'https://googleads.googleapis.com/v19';
+import { GoogleAdsApi, Customer, enums, resources, services } from 'google-ads-api';
 
 interface GoogleAdsCredentials {
   developerToken: string;
@@ -8,113 +8,23 @@ interface GoogleAdsCredentials {
   customerId: string; // 하이픈 없는 10자리
 }
 
-let cachedAccessToken: { token: string; expiresAt: number } | null = null;
-
-// OAuth 2.0 토큰 갱신
-async function getAccessToken(creds: GoogleAdsCredentials): Promise<string> {
-  if (cachedAccessToken && Date.now() < cachedAccessToken.expiresAt) {
-    return cachedAccessToken.token;
-  }
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: creds.clientId,
-      client_secret: creds.clientSecret,
-      refresh_token: creds.refreshToken,
-    }),
+function getCustomer(creds: GoogleAdsCredentials): Customer {
+  const client = new GoogleAdsApi({
+    client_id: creds.clientId,
+    client_secret: creds.clientSecret,
+    developer_token: creds.developerToken,
   });
 
-  if (!res.ok) {
-    throw new Error(`Google OAuth error: ${await res.text()}`);
-  }
-
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  cachedAccessToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in - 60) * 1000,
-  };
-
-  return cachedAccessToken.token;
-}
-
-function buildHeaders(accessToken: string, creds: GoogleAdsCredentials): Record<string, string> {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken}`,
-    'developer-token': creds.developerToken,
-  };
-}
-
-// GAQL 쿼리 실행
-async function searchStream<T>(creds: GoogleAdsCredentials, query: string, retries = 3): Promise<T[]> {
-  const accessToken = await getAccessToken(creds);
-  const url = `${BASE_URL}/customers/${creds.customerId}/googleAds:searchStream`;
-
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: buildHeaders(accessToken, creds),
-        body: JSON.stringify({ query }),
-      });
-
-      if (!res.ok) {
-        const errorBody = await res.text();
-        if (attempt < retries && res.status >= 500) continue;
-        throw new Error(`Google Ads API ${res.status}: ${errorBody}`);
-      }
-
-      const data = (await res.json()) as any[];
-      return data.flatMap((batch: any) => batch.results || []) as T[];
-    } catch (error) {
-      if (attempt === retries) throw error;
-      await new Promise((r) => setTimeout(r, 1000 * attempt));
-    }
-  }
-
-  throw new Error('Google Ads API: max retries exceeded');
-}
-
-// Mutate 요청 (생성/수정/삭제)
-async function mutate(
-  creds: GoogleAdsCredentials,
-  resourceType: string,
-  operations: any[],
-  retries = 3,
-): Promise<any> {
-  const accessToken = await getAccessToken(creds);
-  const url = `${BASE_URL}/customers/${creds.customerId}/${resourceType}:mutate`;
-
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: buildHeaders(accessToken, creds),
-        body: JSON.stringify({ operations }),
-      });
-
-      if (!res.ok) {
-        const errorBody = await res.text();
-        if (attempt < retries && res.status >= 500) continue;
-        throw new Error(`Google Ads mutate ${res.status}: ${errorBody}`);
-      }
-
-      return await res.json();
-    } catch (error) {
-      if (attempt === retries) throw error;
-      await new Promise((r) => setTimeout(r, 1000 * attempt));
-    }
-  }
-
-  throw new Error('Google Ads mutate: max retries exceeded');
+  return client.Customer({
+    customer_id: creds.customerId,
+    refresh_token: creds.refreshToken,
+  });
 }
 
 // === 캠페인 ===
-export function listCampaigns(creds: GoogleAdsCredentials) {
-  return searchStream(creds, `
+export async function listCampaigns(creds: GoogleAdsCredentials) {
+  const customer = getCustomer(creds);
+  return customer.query(`
     SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type,
            campaign_budget.amount_micros, campaign.start_date, campaign.end_date
     FROM campaign
@@ -123,44 +33,45 @@ export function listCampaigns(creds: GoogleAdsCredentials) {
   `);
 }
 
-export function createCampaign(creds: GoogleAdsCredentials, data: {
+export async function createCampaign(creds: GoogleAdsCredentials, data: {
   name: string;
   advertisingChannelType: string;
   status?: string;
   budgetAmountMicros: number;
   biddingStrategyType?: string;
 }) {
-  // 먼저 예산 생성
-  return mutate(creds, 'campaignBudgets', [{
-    create: {
-      name: `${data.name}_budget`,
-      amount_micros: data.budgetAmountMicros,
-      delivery_method: 'STANDARD',
-    },
-  }]).then((budgetResult: any) => {
-    const budgetResourceName = budgetResult.results[0].resourceName;
-    return mutate(creds, 'campaigns', [{
-      create: {
-        name: data.name,
-        advertising_channel_type: data.advertisingChannelType,
-        status: data.status || 'PAUSED',
-        campaign_budget: budgetResourceName,
-        bidding_strategy_type: data.biddingStrategyType || 'MAXIMIZE_CONVERSIONS',
-      },
-    }]);
-  });
-}
+  const customer = getCustomer(creds);
 
-export function updateCampaign(creds: GoogleAdsCredentials, resourceName: string, data: Record<string, unknown>) {
-  return mutate(creds, 'campaigns', [{
-    update: { resource_name: resourceName, ...data },
-    update_mask: Object.keys(data).join(','),
+  // 먼저 예산 생성
+  const budgetResult = await customer.campaignBudgets.create([{
+    name: `${data.name}_budget`,
+    amount_micros: data.budgetAmountMicros,
+    delivery_method: enums.BudgetDeliveryMethod.STANDARD,
+  }]);
+  const budgetResourceName = budgetResult.results[0].resource_name;
+
+  // 캠페인 생성
+  return customer.campaigns.create([{
+    name: data.name,
+    advertising_channel_type: data.advertisingChannelType as any,
+    status: (data.status || 'PAUSED') as any,
+    campaign_budget: budgetResourceName,
+    bidding_strategy_type: (data.biddingStrategyType || 'MAXIMIZE_CONVERSIONS') as any,
   }]);
 }
 
+export async function updateCampaign(creds: GoogleAdsCredentials, resourceName: string, data: Record<string, unknown>) {
+  const customer = getCustomer(creds);
+  return customer.campaigns.update([{
+    resource_name: resourceName,
+    ...data,
+  } as any]);
+}
+
 // === 광고그룹 ===
-export function listAdGroups(creds: GoogleAdsCredentials, campaignId: string) {
-  return searchStream(creds, `
+export async function listAdGroups(creds: GoogleAdsCredentials, campaignId: string) {
+  const customer = getCustomer(creds);
+  return customer.query(`
     SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.cpc_bid_micros
     FROM ad_group
     WHERE campaign.id = ${campaignId}
@@ -168,61 +79,59 @@ export function listAdGroups(creds: GoogleAdsCredentials, campaignId: string) {
   `);
 }
 
-export function createAdGroup(creds: GoogleAdsCredentials, data: {
+export async function createAdGroup(creds: GoogleAdsCredentials, data: {
   campaignResourceName: string;
   name: string;
   cpcBidMicros?: number;
   status?: string;
 }) {
-  return mutate(creds, 'adGroups', [{
-    create: {
-      campaign: data.campaignResourceName,
-      name: data.name,
-      cpc_bid_micros: data.cpcBidMicros,
-      status: data.status || 'ENABLED',
-    },
+  const customer = getCustomer(creds);
+  return customer.adGroups.create([{
+    campaign: data.campaignResourceName,
+    name: data.name,
+    cpc_bid_micros: data.cpcBidMicros,
+    status: (data.status || 'ENABLED') as any,
   }]);
 }
 
 // === 키워드 ===
-export function addKeywords(creds: GoogleAdsCredentials, adGroupResourceName: string, keywords: { text: string; matchType: string }[]) {
-  return mutate(creds, 'adGroupCriteria', keywords.map((kw) => ({
-    create: {
-      ad_group: adGroupResourceName,
-      keyword: {
-        text: kw.text,
-        match_type: kw.matchType, // BROAD | PHRASE | EXACT
-      },
-      status: 'ENABLED',
+export async function addKeywords(creds: GoogleAdsCredentials, adGroupResourceName: string, keywords: { text: string; matchType: string }[]) {
+  const customer = getCustomer(creds);
+  return customer.adGroupCriteria.create(keywords.map((kw) => ({
+    ad_group: adGroupResourceName,
+    keyword: {
+      text: kw.text,
+      match_type: kw.matchType as any, // BROAD | PHRASE | EXACT
     },
+    status: enums.AdGroupCriterionStatus.ENABLED,
   })));
 }
 
 // === 반응형 검색광고 ===
-export function createResponsiveSearchAd(creds: GoogleAdsCredentials, data: {
+export async function createResponsiveSearchAd(creds: GoogleAdsCredentials, data: {
   adGroupResourceName: string;
   headlines: string[]; // 최대 15개
   descriptions: string[]; // 최대 4개
   finalUrls: string[];
 }) {
-  return mutate(creds, 'adGroupAds', [{
-    create: {
-      ad_group: data.adGroupResourceName,
-      ad: {
-        responsive_search_ad: {
-          headlines: data.headlines.map((text) => ({ text })),
-          descriptions: data.descriptions.map((text) => ({ text })),
-        },
-        final_urls: data.finalUrls,
+  const customer = getCustomer(creds);
+  return customer.adGroupAds.create([{
+    ad_group: data.adGroupResourceName,
+    ad: {
+      responsive_search_ad: {
+        headlines: data.headlines.map((text) => ({ text })),
+        descriptions: data.descriptions.map((text) => ({ text })),
       },
-      status: 'ENABLED',
+      final_urls: data.finalUrls,
     },
+    status: enums.AdGroupAdStatus.ENABLED,
   }]);
 }
 
 // === 리포트 ===
-export function getCampaignMetrics(creds: GoogleAdsCredentials, dateRange: { start: string; end: string }) {
-  return searchStream(creds, `
+export async function getCampaignMetrics(creds: GoogleAdsCredentials, dateRange: { start: string; end: string }) {
+  const customer = getCustomer(creds);
+  return customer.query(`
     SELECT campaign.id, campaign.name,
            metrics.impressions, metrics.clicks, metrics.conversions,
            metrics.cost_micros, metrics.ctr, metrics.average_cpc,
@@ -233,8 +142,9 @@ export function getCampaignMetrics(creds: GoogleAdsCredentials, dateRange: { sta
   `);
 }
 
-export function getAdGroupMetrics(creds: GoogleAdsCredentials, campaignId: string, dateRange: { start: string; end: string }) {
-  return searchStream(creds, `
+export async function getAdGroupMetrics(creds: GoogleAdsCredentials, campaignId: string, dateRange: { start: string; end: string }) {
+  const customer = getCustomer(creds);
+  return customer.query(`
     SELECT ad_group.id, ad_group.name,
            metrics.impressions, metrics.clicks, metrics.conversions,
            metrics.cost_micros, metrics.ctr, metrics.average_cpc
@@ -246,22 +156,33 @@ export function getAdGroupMetrics(creds: GoogleAdsCredentials, campaignId: strin
 }
 
 // === 전환 추적 ===
-export function createConversionAction(creds: GoogleAdsCredentials, data: {
+export async function createConversionAction(creds: GoogleAdsCredentials, data: {
   name: string;
   type: string;
   category: string;
 }) {
-  return mutate(creds, 'conversionActions', [{
-    create: {
-      name: data.name,
-      type: data.type,
-      category: data.category,
-      status: 'ENABLED',
-    },
+  const customer = getCustomer(creds);
+  return customer.conversionActions.create([{
+    name: data.name,
+    type: data.type as any,
+    category: data.category as any,
+    status: enums.ConversionActionStatus.ENABLED,
   }]);
 }
 
-// 클라이언트 팩토리
+// === 연결 테스트 ===
+export async function testConnection(creds: GoogleAdsCredentials): Promise<{ success: boolean; message: string }> {
+  try {
+    const customer = getCustomer(creds);
+    const result = await customer.query('SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1');
+    const name = result[0]?.customer?.descriptive_name || result[0]?.customer?.id;
+    return { success: true, message: `Connected (${name})` };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
+}
+
+// 클라이언트 팩토리 (기존 인터페이스 유지)
 export function createGoogleAdsClient(creds: GoogleAdsCredentials) {
   return {
     campaigns: {
@@ -284,8 +205,12 @@ export function createGoogleAdsClient(creds: GoogleAdsCredentials) {
     conversions: {
       create: (data: Parameters<typeof createConversionAction>[1]) => createConversionAction(creds, data),
     },
+    test: () => testConnection(creds),
     reports: {
-      searchStream: (query: string) => searchStream(creds, query),
+      query: (query: string) => {
+        const customer = getCustomer(creds);
+        return customer.query(query);
+      },
     },
   };
 }

@@ -66,7 +66,7 @@ npm run build        # 전체 빌드
 - 네이버 검색광고 (API Key, Secret, Customer ID)
 - Meta Marketing (Access Token, Account ID, App ID, Business ID, Page ID)
 - ⏳ OpenAI (GPT-4o) — 미등록
-- ⏳ Google Ads — 미등록
+- Google Ads (Developer Token, Client ID, Client Secret, Refresh Token, Customer ID) — Basic Access 승인 완료
 - ⏳ Meta App Secret — 미입력
 
 ## 디자인 시스템

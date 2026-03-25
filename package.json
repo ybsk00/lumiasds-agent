@@ -12,13 +12,16 @@
     "clean": "turbo clean"
   },
   "devDependencies": {
-    "turbo": "^2.4.0",
-    "typescript": "^5.7.0",
     "eslint": "^9.0.0",
-    "prettier": "^3.4.0"
+    "prettier": "^3.4.0",
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
   },
   "packageManager": "npm@10.8.0",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "google-ads-api": "^23.0.0"
   }
 }
